@@ -22,15 +22,16 @@ package com.korwe.thecore.api;
 import com.korwe.thecore.messages.CoreMessage;
 import com.korwe.thecore.messages.CoreMessageSerializer;
 import com.korwe.thecore.messages.CoreMessageXmlSerializer;
-import org.apache.log4j.Logger;
 import org.apache.qpid.transport.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author <a href="mailto:nithia.govender@korwe.com>Nithia Govender</a>
  */
 public class CoreReceiver implements SessionListener {
 
-    private static final Logger LOG = Logger.getLogger(CoreReceiver.class);
+    private static final Logger LOG = LoggerFactory.getLogger(CoreReceiver.class);
 
     private final MessageQueue queue;
     private Connection connection;
@@ -55,9 +56,7 @@ public class CoreReceiver implements SessionListener {
         session.setSessionListener(this);
         queueName = getQueueName(queue);
         bindToQueue(queueName, session);
-        if (LOG.isInfoEnabled()) {
-            LOG.info("Connected and waiting for messages: " + queueName);
-        }
+        LOG.info("Connected and waiting for messages: " + queueName);
 
     }
 
@@ -82,24 +81,18 @@ public class CoreReceiver implements SessionListener {
 
     @Override
     public void closed(Session session) {
-        if (LOG.isInfoEnabled()) {
-            LOG.info("Session listener closed: " + queueName);
-        }
+        LOG.info("Session listener closed: " + queueName);
     }
 
     @Override
     public void opened(Session session) {
-        if (LOG.isInfoEnabled()) {
-            LOG.info("Session listener opened");
-        }
+        LOG.info("Session listener opened");
 
     }
 
     @Override
     public void resumed(Session session) {
-        if (LOG.isInfoEnabled()) {
-            LOG.info("Session listener resumed");
-        }
+        LOG.info("Session listener resumed");
 
     }
 

@@ -22,8 +22,9 @@ package com.korwe.thecore.api;
 import com.korwe.thecore.messages.CoreMessage;
 import com.korwe.thecore.messages.CoreMessageSerializer;
 import com.korwe.thecore.messages.CoreMessageXmlSerializer;
-import org.apache.log4j.Logger;
 import org.apache.qpid.transport.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,7 +34,7 @@ import java.util.Map;
  */
 public class CoreSender {
 
-    private static final Logger LOG = Logger.getLogger(CoreSender.class);
+    private static final Logger LOG = LoggerFactory.getLogger(CoreSender.class);
 
     protected MessageQueue queue;
     protected Connection connection;
@@ -50,15 +51,11 @@ public class CoreSender {
         connection = new Connection();
         connection.addConnectionListener(new LoggingConnectionListener());
         CoreConfig config = CoreConfig.getConfig();
-        if (LOG.isInfoEnabled()) {
-            LOG.info("Connecting to queue server " + config.getSetting("amqp_server"));
-        }
+        LOG.info("Connecting to queue server " + config.getSetting("amqp_server"));
         connection.connect(config.getSetting("amqp_server"), config.getIntSetting("amqp_port"),
                 config.getSetting("amqp_vhost"), config.getSetting("amqp_user"),
                 config.getSetting("amqp_password"));
-        if (LOG.isInfoEnabled()) {
-            LOG.info("Connected");
-        }
+        LOG.info("Connected");
 
         session = connection.createSession();
         serializer = new CoreMessageXmlSerializer();
@@ -75,9 +72,7 @@ public class CoreSender {
         if (queue.isDirect()) {
             String destination = MessageQueue.DIRECT_EXCHANGE;
             String routing = queue.getQueueName();
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Sending to " + routing);
-            }
+            LOG.debug("Sending to " + routing);
 
             send(message, destination, routing);
         }
@@ -90,9 +85,7 @@ public class CoreSender {
         if (queue.isTopic()) {
             String destination = MessageQueue.TOPIC_EXCHANGE;
             String routing = queue.getQueueName() + "." + recipient;
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Sending to " + routing);
-            }
+            LOG.debug("Sending to " + routing);
 
             send(message, destination, routing);
         }

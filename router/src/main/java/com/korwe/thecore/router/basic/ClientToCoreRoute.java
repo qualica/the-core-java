@@ -7,6 +7,7 @@ import org.apache.camel.Exchange;
 import org.apache.camel.Message;
 import org.apache.camel.Processor;
 import org.apache.camel.spring.SpringRouteBuilder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,10 +16,17 @@ import org.springframework.stereotype.Component;
 @Component
 public class ClientToCoreRoute extends SpringRouteBuilder {
 
+    @Value("${threads.min}")
+    private int minThreads;
+
+    @Value("${threads.max}")
+    private int maxThreads;
+
     @Override
     public void configure() throws Exception {
-        from(String.format("%s%s//%s?%s", AmqpUriPart.DirectPrefix.getValue(), MessageQueue.DIRECT_EXCHANGE,
-                           MessageQueue.ClientToCore.getQueueName(), AmqpUriPart.Options.getValue()))
+        from(String.format("%s%s//%s?%s&concurrentConsumers=%d&maxConcurrentConsumers=%d&maxMessagesPerTask=100",
+                           AmqpUriPart.DirectPrefix.getValue(), MessageQueue.DIRECT_EXCHANGE,
+                           MessageQueue.ClientToCore.getQueueName(), AmqpUriPart.Options.getValue(), minThreads, maxThreads))
             .choice()
                 .when(header("messageType").isEqualTo(CoreMessage.MessageType.ServiceRequest.name()))
                     .recipientList(simple(String.format("%s%s/%s.${in.header.choreography}//?%s,%s%s//%s?%s",

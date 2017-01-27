@@ -20,6 +20,14 @@
     </camel:contextScan>
   </camel:camelContext>
 
+  <bean id="camelTracer" class="org.apache.camel.processor.interceptor.Tracer">
+    <property name="traceExceptions" value="false"/>
+    <property name="traceInterceptors" value="true"/>
+    <property name="logLevel" value="INFO"/>
+    <property name="logName" value="com.korwe.thecore.router.trace"/>
+  </bean>
+
+
   <bean id="amqp" class="org.apache.camel.component.amqp.AMQPComponent">
     <property name="connectionFactory">
       <bean class="org.apache.qpid.client.AMQConnectionFactory">

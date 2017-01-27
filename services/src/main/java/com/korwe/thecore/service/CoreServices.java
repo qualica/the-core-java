@@ -24,16 +24,15 @@ import com.google.inject.servlet.GuiceFilter;
 import com.korwe.thecore.api.CoreConfig;
 import com.korwe.thecore.service.ping.CorePingService;
 import com.korwe.thecore.service.syndication.CoreSyndicationService;
-import com.korwe.thecore.session.SessionManager;
-import com.korwe.thecore.webcore.listener.WebCoreListener;
 import com.korwe.thecore.webcore.servlet.GuiceServletConfig;
-import org.apache.log4j.Logger;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.nio.SelectChannelConnector;
 import org.eclipse.jetty.servlet.DefaultServlet;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.util.thread.ExecutorThreadPool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -43,23 +42,19 @@ import java.util.Set;
  */
 public class CoreServices {
 
-    private static final Logger LOG = Logger.getLogger(CoreServices.class);
+    private static final Logger LOG = LoggerFactory.getLogger(CoreServices.class);
 
     private static Set<Service> services = new HashSet<Service>(5);
 
     public static void main(String[] args) {
         CoreConfig.initialize(CoreServices.class.getResourceAsStream("/coreconfig.xml"));
-//        final Service sessionManager = new SessionManager();
         final Server servletServer = configureServer();
-//        final Service webCoreListener = new WebCoreListener();
         services.add(new CorePingService());
         services.add(new CoreSyndicationService());
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
-                //sessionManager.stop();
-//                webCoreListener.stop();
                 for (Service service: services) {
                     service.stop();
                 }
@@ -68,13 +63,11 @@ public class CoreServices {
                     servletServer.stop();
                 }
                 catch (Exception e) {
-                    LOG.error(e);
+                    LOG.error("Shutdown error", e);
                 }
             }
         });
 
-        //sessionManager.start();
-//        webCoreListener.start();
         for (Service service : services) {
             service.start();
         }
@@ -84,7 +77,7 @@ public class CoreServices {
             servletServer.join();
         }
         catch (Exception e) {
-            LOG.error(e);
+            LOG.error("Startup error ", e);
         }
     }
 

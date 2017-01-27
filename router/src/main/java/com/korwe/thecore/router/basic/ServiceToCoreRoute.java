@@ -3,6 +3,7 @@ package com.korwe.thecore.router.basic;
 import com.korwe.thecore.api.MessageQueue;
 import com.korwe.thecore.router.AmqpUriPart;
 import org.apache.camel.spring.SpringRouteBuilder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -11,10 +12,17 @@ import org.springframework.stereotype.Component;
 @Component
 public class ServiceToCoreRoute extends SpringRouteBuilder {
 
+    @Value("${threads.min}")
+    private int minThreads;
+
+    @Value("${threads.max}")
+    private int maxThreads;
+
     @Override
     public void configure() throws Exception {
-        from(String.format("%s%s//%s?%s", AmqpUriPart.DirectPrefix.getValue(), MessageQueue.DIRECT_EXCHANGE,
-                           MessageQueue.ServiceToCore.getQueueName(), AmqpUriPart.Options.getValue()))
+        from(String.format("%s%s//%s?%s&concurrentConsumers=%d&maxConcurrentConsumers=%d&maxMessagesPerTask=100",
+                           AmqpUriPart.DirectPrefix.getValue(), MessageQueue.DIRECT_EXCHANGE,
+                           MessageQueue.ServiceToCore.getQueueName(), AmqpUriPart.Options.getValue(), minThreads, maxThreads))
                 .recipientList(simple(String.format("%s%s/%s.${in.header.sessionId}//?%s,%s%s//%s?%s",
                                                     AmqpUriPart.TopicPrefix.getValue(),
                                                     MessageQueue.TOPIC_EXCHANGE,

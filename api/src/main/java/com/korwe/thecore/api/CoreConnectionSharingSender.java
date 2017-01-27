@@ -1,15 +1,16 @@
 package com.korwe.thecore.api;
 
 import com.korwe.thecore.messages.CoreMessageXmlSerializer;
-import org.apache.log4j.Logger;
 import org.apache.qpid.transport.Connection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author <a href="mailto:dario.matonicki@korwe.com>Dario Matonicki</a>
  */
 public class CoreConnectionSharingSender extends CoreSender {
 
-    private static final Logger LOG = Logger.getLogger(CoreConnectionSharingSender.class);
+    private static final Logger LOG = LoggerFactory.getLogger(CoreConnectionSharingSender.class);
 
 
     protected CoreConnectionSharingSender(MessageQueue queue, Connection sharedConnection) {

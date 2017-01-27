@@ -19,7 +19,8 @@
 
 package com.korwe.thecore.api;
 
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.util.Properties;
@@ -29,7 +30,7 @@ import java.util.Properties;
  */
 public class CoreConfig {
 
-    private static final Logger LOG = Logger.getLogger(CoreConfig.class);
+    private static final Logger LOG = LoggerFactory.getLogger(CoreConfig.class);
 
     private static CoreConfig config;
 

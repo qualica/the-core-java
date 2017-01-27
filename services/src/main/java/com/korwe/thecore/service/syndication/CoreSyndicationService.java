@@ -24,7 +24,8 @@ import com.korwe.thecore.messages.ServiceRequest;
 import com.korwe.thecore.messages.ServiceResponse;
 import com.korwe.thecore.service.ping.CorePingService;
 import com.sun.syndication.feed.synd.SyndEntry;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -33,7 +34,7 @@ import java.util.List;
  */
 public class CoreSyndicationService extends CorePingService {
 
-    private static final Logger LOG = Logger.getLogger(SyndicationService.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SyndicationService.class);
     private static final String FEED_ERROR = "The feed could not be updated";
 
     private SyndicationService syndicationService = new SyndicationServiceImpl();

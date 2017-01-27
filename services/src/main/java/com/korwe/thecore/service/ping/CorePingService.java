@@ -22,14 +22,15 @@ package com.korwe.thecore.service.ping;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.korwe.thecore.api.*;
 import com.korwe.thecore.messages.*;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author <a href="mailto:nithia.govender@korwe.com>Nithia Govender</a>
  */
 public class CorePingService extends AbstractIdleService implements CoreMessageHandler {
 
-    private static final Logger LOG = Logger.getLogger(CorePingService.class);
+    private static final Logger LOG = LoggerFactory.getLogger(CorePingService.class);
     private static final String BAD_MESSAGE_TYPE = "Message is not a service request";
     private static final String BAD_SERVICE = "The request is not for this service";
     private static final String BAD_FUNCTION = "Unsupported function: ";

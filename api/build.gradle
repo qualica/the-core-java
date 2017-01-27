@@ -1,6 +1,6 @@
 apply plugin: 'maven-publish'
 dependencies {
-    compile 'log4j:log4j:1.2.16'
+    compile 'org.slf4j:slf4j-api:1.7.21'
     compile 'org.apache.qpid:qpid-client:0.12'
     compile 'com.jamesmurty.utils:java-xmlbuilder:1.1'
 }
