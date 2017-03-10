@@ -22,12 +22,19 @@ package com.korwe.thecore.api;
 import com.korwe.thecore.messages.CoreMessage;
 import com.korwe.thecore.messages.CoreMessageSerializer;
 import com.korwe.thecore.messages.CoreMessageXmlSerializer;
-import org.apache.qpid.transport.*;
+import org.apache.qpid.client.AMQConnection;
+import org.apache.qpid.client.AMQQueue;
+import org.apache.qpid.client.AMQTopic;
+import org.apache.qpid.framing.AMQShortString;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.Map;
+import javax.jms.Connection;
+import javax.jms.Destination;
+import javax.jms.JMSException;
+import javax.jms.MessageProducer;
+import javax.jms.Session;
+import javax.jms.TextMessage;
 
 /**
  * @author <a href="mailto:nithia.govender@korwe.com>Nithia Govender</a>
@@ -47,33 +54,42 @@ public class CoreSender {
 
 
     public CoreSender(MessageQueue queue) {
-        this.queue = queue;
-        connection = new Connection();
-        connection.addConnectionListener(new LoggingConnectionListener());
-        CoreConfig config = CoreConfig.getConfig();
-        LOG.info("Connecting to queue server " + config.getSetting("amqp_server"));
-        connection.connect(config.getSetting("amqp_server"), config.getIntSetting("amqp_port"),
-                config.getSetting("amqp_vhost"), config.getSetting("amqp_user"),
-                config.getSetting("amqp_password"));
-        LOG.info("Connected");
+        try {
+            CoreConfig config = CoreConfig.getConfig();
+            this.queue = queue;
+            LOG.info("Connecting to queue server " + config.getSetting("amqp_server"));
+            connection = new AMQConnection(config.getSetting("amqp_server"), config.getIntSetting("amqp_port"),
+                                           config.getSetting("amqp_user"),
+                                           config.getSetting("amqp_password"), null, config.getSetting("amqp_vhost"));
+            LOG.info("Connected");
 
-        session = connection.createSession();
-        serializer = new CoreMessageXmlSerializer();
+            session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+            serializer = new CoreMessageXmlSerializer();
+        }
+        catch (Exception e) {
+            LOG.error("Connection failed", e);
+            throw new RuntimeException(e);
+        }
     }
 
     public void close() {
         LOG.info("Closing sender session and connection");
-        session.sync();
-        session.close();
-        connection.close();
+        try {
+            session.close();
+            connection.close();
+        }
+        catch (JMSException e) {
+            LOG.warn("Unable to close sender", e);
+        }
     }
 
     public void sendMessage(CoreMessage message) {
         if (queue.isDirect()) {
-            String destination = MessageQueue.DIRECT_EXCHANGE;
+            String exchange = MessageQueue.DIRECT_EXCHANGE;
             String routing = queue.getQueueName();
             LOG.debug("Sending to " + routing);
-
+            AMQShortString queueName = AMQShortString.valueOf(routing);
+            Destination destination = new AMQQueue(AMQShortString.valueOf(exchange), queueName, queueName);
             send(message, destination, routing);
         }
         else {
@@ -83,9 +99,11 @@ public class CoreSender {
 
     public void sendMessage(CoreMessage message, String recipient) {
         if (queue.isTopic()) {
-            String destination = MessageQueue.TOPIC_EXCHANGE;
+            String exchange = MessageQueue.TOPIC_EXCHANGE;
             String routing = queue.getQueueName() + "." + recipient;
             LOG.debug("Sending to " + routing);
+            AMQShortString queueName = AMQShortString.valueOf(routing);
+            Destination destination = new AMQTopic(AMQShortString.valueOf(exchange), queueName);
 
             send(message, destination, routing);
         }
@@ -95,25 +113,31 @@ public class CoreSender {
 
     }
 
-    private void send(CoreMessage message, String destination, String routing) {
-        String serialized = serializer.serialize(message);
-        DeliveryProperties props = new DeliveryProperties();
-        props.setRoutingKey(routing);
-        MessageProperties msgProps = new MessageProperties();
-        Map<String, Object> appHeaders = new HashMap<String, Object>();
-        appHeaders.put("sessionId", message.getSessionId());
-        appHeaders.put("choreography", message.getChoreography());
-        appHeaders.put("guid", message.getGuid());
-        appHeaders.put("messageType", message.getMessageType().name());
-        msgProps.setApplicationHeaders(appHeaders);
-        session.messageTransfer(destination, MessageAcceptMode.EXPLICIT, MessageAcquireMode.PRE_ACQUIRED,
-                new Header(props, msgProps), serialized);
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Sent: " + serialized);
+    private void send(CoreMessage message, Destination destination, String routing) {
+        try {
+            String serialized = serializer.serialize(message);
+
+            TextMessage jmsMessage = session.createTextMessage(serialized);
+            jmsMessage.setStringProperty("sessionId", message.getSessionId());
+            jmsMessage.setStringProperty("guid", message.getGuid());
+            jmsMessage.setStringProperty("choreography", message.getChoreography());
+            jmsMessage.setStringProperty("messageType", message.getMessageType().name());
+
+            LOG.debug("Sending message [{}]", message.getGuid());
+
+            MessageProducer producer = session.createProducer(destination);
+            producer.send(jmsMessage);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Sent: " + serialized);
+            }
+            else {
+                int endIndex = serialized.indexOf("</function");
+                LOG.info("Sent: " + serialized.substring(0, endIndex > 0 ? endIndex : Math.min(350, serialized.length())));
+            }
         }
-        else {
-            int endIndex = serialized.indexOf("</function");
-            LOG.info("Sent: " + serialized.substring(0, endIndex > 0 ? endIndex : Math.min(350, serialized.length())));
+        catch (JMSException e) {
+            LOG.error("Error sending message", e);
+            throw new RuntimeException(e);
         }
     }
 

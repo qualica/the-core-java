@@ -1,9 +1,12 @@
 package com.korwe.thecore.api;
 
 import com.korwe.thecore.messages.CoreMessageXmlSerializer;
-import org.apache.qpid.transport.Connection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.jms.Connection;
+import javax.jms.JMSException;
+import javax.jms.Session;
 
 /**
  * @author <a href="mailto:dario.matonicki@korwe.com>Dario Matonicki</a>
@@ -14,17 +17,27 @@ public class CoreConnectionSharingSender extends CoreSender {
 
 
     protected CoreConnectionSharingSender(MessageQueue queue, Connection sharedConnection) {
-        this.queue = queue;
-        this.connection = sharedConnection;
+        try {
+            this.queue = queue;
+            this.connection = sharedConnection;
 
-        session = connection.createSession();
-        serializer = new CoreMessageXmlSerializer();
+            session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+            serializer = new CoreMessageXmlSerializer();
+        }
+        catch (JMSException e) {
+            LOG.error("Error creating sender", e);
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     public void close() {
         LOG.info("Closing sender session only");
-        session.sync();
-        session.close();
+        try {
+            session.close();
+        }
+        catch (JMSException e) {
+            LOG.warn("Error closing session", e);
+        }
     }
 }

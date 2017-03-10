@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.charset.Charset;
+import java.util.UUID;
 
 /**
  * @author <a href="mailto:nithia.govender@korwe.com>Nithia Govender</a>
@@ -18,7 +19,7 @@ public class TestClient implements CoreMessageHandler {
     private CoreSubscriber dataSubscriber;
     private CoreMessageSerializer serializer = new CoreMessageXmlSerializer();
 
-    private static final String MSG_FILE = "/msg.0.xml";
+    private static final String MSG_FILE = "/msg.1.xml";
 
     private void connect() {
         CoreConfig.initialize(this.getClass().getResourceAsStream("/coreconfig.xml"));
@@ -54,7 +55,10 @@ public class TestClient implements CoreMessageHandler {
                 msgFile.close();
             }
         }
-        return builder.length() > 0 ? serializer.deserialize(builder.toString()) : null;
+
+        String message = builder.toString();
+        String guid = UUID.randomUUID().toString();
+        return builder.length() > 0 ? serializer.deserialize(String.format(message, guid)) : null;
     }
 
     private void sendMessage(CoreMessage message) {
@@ -70,12 +74,12 @@ public class TestClient implements CoreMessageHandler {
     public static void main(String[] args) throws InterruptedException, IOException {
         TestClient client = new TestClient();
         client.connect();
-        client.sendMessage(new InitiateSessionRequest(SESSION_ID));
-        Thread.sleep(100L);
+//        client.sendMessage(new InitiateSessionRequest(SESSION_ID));
+//        Thread.sleep(100L);
         client.sendMessage(client.readMessage());
         Thread.sleep(2000L);
-        client.sendMessage(new KillSessionRequest(SESSION_ID));
-        Thread.sleep(100L);
+//        client.sendMessage(new KillSessionRequest(SESSION_ID));
+//        Thread.sleep(100L);
         client.close();
     }
 }

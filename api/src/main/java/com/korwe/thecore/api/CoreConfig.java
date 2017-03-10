@@ -32,6 +32,8 @@ public class CoreConfig {
 
     private static final Logger LOG = LoggerFactory.getLogger(CoreConfig.class);
 
+    public static final String AMQP_URL = "amqp://%s:%s@%s%s?brokerlist='tcp://%s:%s'";
+
     private static CoreConfig config;
 
     private Properties prop = new Properties();

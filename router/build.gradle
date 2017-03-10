@@ -1,8 +1,8 @@
 dependencies {
     compile project(':api')
-    compile 'org.apache.camel:camel-core:2.10.4'
-    compile 'org.apache.camel:camel-amqp:2.10.4'
-    compile 'org.apache.camel:camel-spring:2.10.4'
+    compile 'org.apache.camel:camel-core:2.16.5'
+    compile 'org.apache.camel:camel-amqp:2.16.5'
+    compile 'org.apache.camel:camel-spring:2.16.5'
     runtime 'org.apache.geronimo.specs:geronimo-jms_1.1_spec:1.1.1'
 
 }

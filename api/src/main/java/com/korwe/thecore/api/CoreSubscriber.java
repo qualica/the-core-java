@@ -19,10 +19,15 @@
 
 package com.korwe.thecore.api;
 
-import org.apache.qpid.transport.Option;
-import org.apache.qpid.transport.Session;
+import org.apache.qpid.client.AMQTopic;
+import org.apache.qpid.framing.AMQShortString;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.jms.Destination;
+import javax.jms.JMSException;
+import javax.jms.MessageConsumer;
+import javax.jms.Session;
 
 /**
  * @author <a href="mailto:nithia.govender@korwe.com>Nithia Govender</a>
@@ -39,12 +44,15 @@ public class CoreSubscriber extends CoreReceiver {
     }
 
     @Override
-    protected void bindToQueue(String queueName, Session session) {
+    protected void bindToQueue(String queueName, Session session) throws JMSException {
         LOG.info("Binding to topic " + queueName);
 
-        session.queueDeclare(queueName, null, null, Option.AUTO_DELETE);
-        session.exchangeBind(queueName, MessageQueue.TOPIC_EXCHANGE, queueName, null);
-        super.bindToQueue(queueName, session);
+        AMQShortString amqName = AMQShortString.valueOf(queueName);
+        Destination destination = new AMQTopic(AMQShortString.valueOf(MessageQueue.TOPIC_EXCHANGE), amqName, amqName);
+
+        MessageConsumer consumer = session.createConsumer(destination);
+        consumer.setMessageListener(this);
+        connection.start();
     }
 
     @Override

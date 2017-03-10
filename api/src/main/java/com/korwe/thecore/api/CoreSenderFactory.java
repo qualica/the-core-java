@@ -1,8 +1,11 @@
 package com.korwe.thecore.api;
 
-import org.apache.qpid.transport.Connection;
+import org.apache.qpid.client.AMQConnection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
+import javax.jms.Connection;
+import javax.jms.JMSException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -10,6 +13,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author <a href="mailto:dario.matonicki@korwe.com>Dario Matonicki</a>
  */
 public class CoreSenderFactory {
+
+    private static final Logger LOG = LoggerFactory.getLogger(CoreSenderFactory.class);
 
     private Map<String, Connection> connections = new ConcurrentHashMap<>();
 
@@ -39,7 +44,12 @@ public class CoreSenderFactory {
     public void close(String serviceName) {
         Connection connection = getConnection(serviceName);
         if (connection != null) {
-            connection.close();
+            try {
+                connection.close();
+            }
+            catch (JMSException e) {
+                LOG.warn("Error closing connection", e);
+            }
         }
     }
 
@@ -51,18 +61,25 @@ public class CoreSenderFactory {
              connection = connections.get(serviceName);
         }
         else {
-            Connection newConnection = new Connection();
-            newConnection.addConnectionListener(new LoggingConnectionListener());
+            try {
+                CoreConfig config = CoreConfig.getConfig();
+                LOG.info("Connecting to queue server " + config.getSetting("amqp_server"));
+                Connection newConnection = new AMQConnection(config.getSetting("amqp_server"),
+                                                             config.getIntSetting("amqp_port"),
+                                                             config.getSetting("amqp_user"),
+                                                             config.getSetting("amqp_password"),
+                                                             null,
+                                                             config.getSetting("amqp_vhost"));
+                LOG.info("Connected");
 
-            CoreConfig config = CoreConfig.getConfig();
+                connections.put(serviceName, newConnection);
+                connection = newConnection;
+            }
+            catch (Exception e) {
+                LOG.error("Connection failed", e);
+                throw new RuntimeException(e);
+            }
 
-            newConnection.connect(config.getSetting("amqp_server"), config.getIntSetting("amqp_port"),
-                    config.getSetting("amqp_vhost"), config.getSetting("amqp_user"),
-                    config.getSetting("amqp_password"));
-
-            connections.put(serviceName, newConnection);
-
-            connection = newConnection;
         }
 
         return connection;
