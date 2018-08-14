@@ -2,33 +2,33 @@ package com.korwe.thecore.router.basic;
 
 import com.korwe.thecore.api.MessageQueue;
 import com.korwe.thecore.router.AmqpUriPart;
+import org.apache.camel.component.rabbitmq.RabbitMQConstants;
 import org.apache.camel.spring.SpringRouteBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * @author <a href="mailto:nithia.govender@korwe.com>Nithia Govender</a>
+ * @author <a href="mailto:nithia.govender@korwe.com">Nithia Govender</a>
  */
 @Component
 public class ServiceToCoreRoute extends SpringRouteBuilder {
 
-    @Value("${threads.min}")
-    private int minThreads;
+    @Value("${amqp.host}")
+    private String hostname;
 
-    @Value("${threads.max}")
-    private int maxThreads;
+    @Value("${amqp.port}")
+    private String port;
 
     @Override
     public void configure() throws Exception {
-        from(String.format("%s%s//%s?%s&concurrentConsumers=%d&maxConcurrentConsumers=%d&maxMessagesPerTask=100",
-                           AmqpUriPart.DirectPrefix.getValue(), MessageQueue.DIRECT_EXCHANGE,
-                           MessageQueue.ServiceToCore.getQueueName(), AmqpUriPart.Options.getValue(), minThreads, maxThreads))
-                .recipientList(simple(String.format("%s%s/%s.${in.header.sessionId}//?%s,%s%s//%s?%s",
-                                                    AmqpUriPart.TopicPrefix.getValue(),
-                                                    MessageQueue.TOPIC_EXCHANGE,
-                                                    MessageQueue.CoreToClient.getQueueName(),
+        from(String.format("rabbitmq://%s:%s/%s?exchangeType=direct&declare=false&queue=%s&%s", hostname, port, MessageQueue.DIRECT_EXCHANGE,
+                           MessageQueue.ServiceToCore.getQueueName(), AmqpUriPart.Options.getValue()))
+                .setHeader(RabbitMQConstants.ROUTING_KEY).simple(String.format("%s.${in.header.sessionId}", MessageQueue.CoreToClient.getQueueName()))
+                .removeHeader(RabbitMQConstants.EXCHANGE_NAME)
+                .recipientList(simple(String.format("rabbitmq://%s:%s/%s?exchangeType=topic&declare=false&%s,rabbitmq://%s:%s/%s?exchangeType=direct&declare=false&queue=%s&%s",
+                                                    hostname, port, MessageQueue.TOPIC_EXCHANGE,
                                                     AmqpUriPart.Options.getValue(),
-                                                    AmqpUriPart.DirectPrefix.getValue(),
+                                                    hostname, port,
                                                     MessageQueue.DIRECT_EXCHANGE,
                                                     MessageQueue.Trace.getQueueName(),
                                                     AmqpUriPart.Options.getValue())));
