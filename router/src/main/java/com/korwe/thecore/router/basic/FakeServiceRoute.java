@@ -15,9 +15,9 @@ public class FakeServiceRoute extends SpringRouteBuilder {
 
     @Override
     public void configure() throws Exception {
-        from(String.format("%s%s/%s.%s//?%s", AmqpUriPart.TopicPrefix.getValue(), MessageQueue.TOPIC_EXCHANGE,
-                           MessageQueue.CoreToService.getQueueName(), SERVICE_NAME, AmqpUriPart.Options.getValue()))
-                .to(String.format("%s%s//%s?%s", AmqpUriPart.DirectPrefix.getValue(), MessageQueue.DIRECT_EXCHANGE,
+        from(String.format("rabbitmq://%s?exchangeType=direct&declare=false&queue=%s&%s", MessageQueue.DIRECT_EXCHANGE,
+                MessageQueue.ClientToCore.getQueueName(), AmqpUriPart.Options.getValue()))
+                .to(String.format("rabbitmq://%s?exchangeType=direct&declare=false&queue=%s&%s", MessageQueue.DIRECT_EXCHANGE,
                                   MessageQueue.ServiceToCore.getQueueName(), AmqpUriPart.Options.getValue()));
     }
 }
