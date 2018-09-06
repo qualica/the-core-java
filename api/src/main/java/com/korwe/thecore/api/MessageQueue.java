@@ -27,7 +27,7 @@ public enum MessageQueue {
     CoreToService("core.core-service", false),
     ServiceToCore("core.service-core", true),
     CoreToClient("core.core-client", false),
-    CoreToSession("core.core-session", false),
+    CoreToSession("core.core-channel", false),
     Data("core.data", false),
     Trace("core.trace", true);
 
@@ -37,7 +37,7 @@ public enum MessageQueue {
     private String queueName;
     private boolean direct;
 
-    private MessageQueue(String queueName, boolean direct) {
+    MessageQueue(String queueName, boolean direct) {
         this.queueName = queueName;
         this.direct = direct;
     }

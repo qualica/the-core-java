@@ -11,4 +11,7 @@
     <entry key="timeout_seconds">1800</entry>
     <entry key="amqp_user">guest</entry>
     <entry key="session_message_filter">#</entry>
+    <entry key="connection_retries">10</entry>
+    <entry key="retry_backoff_millis">2000</entry>
+    <entry key="retry_backoff_max_millis">10000</entry>
 </properties>

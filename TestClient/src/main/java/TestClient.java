@@ -12,14 +12,14 @@ import java.util.UUID;
  */
 public class TestClient implements CoreMessageHandler {
 
-    private static final String SESSION_ID = "test-session-001";
+    private static final String SESSION_ID = "test-channel-001";
     private Logger log = LoggerFactory.getLogger(this.getClass());
     private CoreSender sender;
     private CoreSubscriber subscriber;
     private CoreSubscriber dataSubscriber;
     private CoreMessageSerializer serializer = new CoreMessageXmlSerializer();
 
-    private static final String MSG_FILE = "/msg.1.xml";
+    private static final String MSG_FILE = "/msg.0.xml";
 
     private void connect() {
         CoreConfig.initialize(this.getClass().getResourceAsStream("/coreconfig.xml"));
@@ -38,21 +38,14 @@ public class TestClient implements CoreMessageHandler {
 
     private CoreMessage readMessage() throws IOException {
         String lineSep = System.getProperty("line.separator");
-        BufferedReader msgFile = null;
         StringBuilder builder = new StringBuilder();
-        try {
-            msgFile = new BufferedReader(new InputStreamReader(this.getClass().getResourceAsStream(MSG_FILE),
-                                                               Charset.forName("UTF-8")));
+        try (BufferedReader msgFile = new BufferedReader(new InputStreamReader(this.getClass().getResourceAsStream(MSG_FILE),
+                Charset.forName("UTF-8")))) {
             String line = msgFile.readLine();
 
             while (line != null) {
                 builder.append(line).append(lineSep);
                 line = msgFile.readLine();
-            }
-        }
-        finally {
-            if (msgFile != null) {
-                msgFile.close();
             }
         }
 
@@ -63,7 +56,12 @@ public class TestClient implements CoreMessageHandler {
 
     private void sendMessage(CoreMessage message) {
         log.debug("Sending message: {}", message);
-        sender.sendMessage(message);
+        try {
+            sender.sendMessage(message);
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Override

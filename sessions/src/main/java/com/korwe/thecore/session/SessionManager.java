@@ -38,7 +38,7 @@ public class SessionManager extends AbstractExecutionThreadService implements Co
 
     private static final Logger LOG = LoggerFactory.getLogger(SessionManager.class);
 
-    private static Map<String, CoreSession> sessions = new ConcurrentHashMap<String, CoreSession>(128, 2.0f, 8);
+    private static Map<String, CoreSession> sessions = new ConcurrentHashMap<>(128, 2.0f, 8);
 
     private final CoreSubscriber subscriber;
     private final CoreSender clientSender;
@@ -106,7 +106,7 @@ public class SessionManager extends AbstractExecutionThreadService implements Co
     private CoreResponse handleDefault(CoreMessage message, String sessionId) {
         if (sessions.containsKey(sessionId)) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Forwarding to session");
+                LOG.debug("Forwarding to channel");
             }
             sessions.get(sessionId).handleMessage(message);
             return null;

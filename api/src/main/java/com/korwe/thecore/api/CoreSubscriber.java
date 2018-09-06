@@ -19,15 +19,11 @@
 
 package com.korwe.thecore.api;
 
-import org.apache.qpid.client.AMQTopic;
-import org.apache.qpid.framing.AMQShortString;
+import com.rabbitmq.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.jms.Destination;
-import javax.jms.JMSException;
-import javax.jms.MessageConsumer;
-import javax.jms.Session;
+import java.io.IOException;
 
 /**
  * @author <a href="mailto:nithia.govender@korwe.com>Nithia Govender</a>
@@ -44,15 +40,17 @@ public class CoreSubscriber extends CoreReceiver {
     }
 
     @Override
-    protected void bindToQueue(String queueName, Session session) throws JMSException {
+    protected void bindToQueue(String queueName, Channel channel) {
         LOG.info("Binding to topic " + queueName);
-
-        AMQShortString amqName = AMQShortString.valueOf(queueName);
-        Destination destination = new AMQTopic(AMQShortString.valueOf(MessageQueue.TOPIC_EXCHANGE), amqName, amqName);
-
-        MessageConsumer consumer = session.createConsumer(destination);
-        consumer.setMessageListener(this);
-        connection.start();
+        try {
+            channel.exchangeDeclare(MessageQueue.TOPIC_EXCHANGE, BuiltinExchangeType.TOPIC, true, true, null);
+            queueName = channel.queueDeclare(queueName, true, false, true, null).getQueue();
+            channel.queueBind(queueName, MessageQueue.TOPIC_EXCHANGE, getQueueName(queue));
+            channel.basicConsume(queueName, true, this);
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     @Override

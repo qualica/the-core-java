@@ -19,78 +19,78 @@
 
 package com.korwe.thecore.api;
 
-import com.korwe.thecore.messages.CoreMessage;
-import com.korwe.thecore.messages.CoreMessageSerializer;
-import com.korwe.thecore.messages.CoreMessageXmlSerializer;
-import org.apache.qpid.client.AMQConnection;
-import org.apache.qpid.client.AMQQueue;
-import org.apache.qpid.client.AMQTopic;
-import org.apache.qpid.framing.AMQShortString;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.korwe.thecore.messages.*;
+import com.rabbitmq.client.*;
+import org.slf4j.*;
 
-import javax.jms.Connection;
-import javax.jms.Destination;
-import javax.jms.JMSException;
-import javax.jms.MessageProducer;
-import javax.jms.Session;
-import javax.jms.TextMessage;
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.*;
 
 /**
  * @author <a href="mailto:nithia.govender@korwe.com>Nithia Govender</a>
  */
-public class CoreSender {
+public class CoreSender implements ShutdownListener, RecoveryListener {
 
     private static final Logger LOG = LoggerFactory.getLogger(CoreSender.class);
 
     protected MessageQueue queue;
     protected Connection connection;
     protected CoreMessageSerializer serializer;
-    protected Session session;
+    protected Channel channel;
 
     protected CoreSender() {
-
+        this.serializer = new CoreMessageXmlSerializer();
     }
 
-
     public CoreSender(MessageQueue queue) {
+        this();
+        this.queue = queue;
         try {
-            CoreConfig config = CoreConfig.getConfig();
-            this.queue = queue;
-            LOG.info("Connecting to queue server " + config.getSetting("amqp_server"));
-            connection = new AMQConnection(config.getSetting("amqp_server"), config.getIntSetting("amqp_port"),
-                                           config.getSetting("amqp_user"),
-                                           config.getSetting("amqp_password"), null, config.getSetting("amqp_vhost"));
-            LOG.info("Connected");
-
-            session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-            serializer = new CoreMessageXmlSerializer();
+            this.connection = CoreConnection.coreConnection(CoreConfig.getConfig());
+            if (connection != null) {
+                this.channel = connection.createChannel();
+                channel.addShutdownListener(this);
+                LOG.info("Successfully Created Channel");
+            }
         }
-        catch (Exception e) {
-            LOG.error("Connection failed", e);
-            throw new RuntimeException(e);
+        catch (IOException e) {
+            LOG.error("Error creating channel and connection", e);
         }
     }
 
     public void close() {
-        LOG.info("Closing sender session and connection");
+        LOG.info("Closing sender channel and connection");
         try {
-            session.close();
-            connection.close();
+            if (channel != null) {
+                channel.close();
+            }
+            if (connection != null) {
+                connection.close();
+            }
         }
-        catch (JMSException e) {
-            LOG.warn("Unable to close sender", e);
+        catch (TimeoutException | IOException e) {
+            LOG.error("Error closing channel", e);
         }
     }
 
     public void sendMessage(CoreMessage message) {
+        if (connection == null) {
+            throw new RuntimeException("No Connection To RabbitMq");
+        }
         if (queue.isDirect()) {
             String exchange = MessageQueue.DIRECT_EXCHANGE;
             String routing = queue.getQueueName();
             LOG.debug("Sending to " + routing);
-            AMQShortString queueName = AMQShortString.valueOf(routing);
-            Destination destination = new AMQQueue(AMQShortString.valueOf(exchange), queueName, queueName);
-            send(message, destination, routing);
+            try {
+                channel.exchangeDeclare(exchange, BuiltinExchangeType.DIRECT, true, true, null);
+                String queueName = channel.queueDeclare(queue.getQueueName(), true, false, true, null).getQueue();
+                channel.queueBind(queueName, exchange, routing);
+                send(message, exchange, routing);
+            }
+            catch (IOException e) {
+                LOG.error("Error sending message", e);
+            }
         }
         else {
             LOG.error("Message to topic queue must be explicitly addressed");
@@ -98,14 +98,22 @@ public class CoreSender {
     }
 
     public void sendMessage(CoreMessage message, String recipient) {
+        if (connection == null) {
+            throw new RuntimeException("No Connection To RabbitMq");
+        }
         if (queue.isTopic()) {
             String exchange = MessageQueue.TOPIC_EXCHANGE;
             String routing = queue.getQueueName() + "." + recipient;
             LOG.debug("Sending to " + routing);
-            AMQShortString queueName = AMQShortString.valueOf(routing);
-            Destination destination = new AMQTopic(AMQShortString.valueOf(exchange), queueName);
-
-            send(message, destination, routing);
+            try {
+                channel.exchangeDeclare(exchange, BuiltinExchangeType.TOPIC, true, true, null);
+                routing = channel.queueDeclare(routing, true, false, true, null).getQueue();
+                channel.queueBind(routing, exchange, routing);
+                send(message, exchange, routing);
+            }
+            catch (IOException e) {
+                LOG.error("Error sending message", e);
+            }
         }
         else {
             LOG.error("Cannot send to explicitly addressed message direct point to point queue");
@@ -113,20 +121,17 @@ public class CoreSender {
 
     }
 
-    private void send(CoreMessage message, Destination destination, String routing) {
+    private void send(CoreMessage message, String exchange, String routing) {
         try {
             String serialized = serializer.serialize(message);
-
-            TextMessage jmsMessage = session.createTextMessage(serialized);
-            jmsMessage.setStringProperty("sessionId", message.getSessionId());
-            jmsMessage.setStringProperty("guid", message.getGuid());
-            jmsMessage.setStringProperty("choreography", message.getChoreography());
-            jmsMessage.setStringProperty("messageType", message.getMessageType().name());
-
+            Map<String, Object> messagePropertyBag = new HashMap<>();
+            messagePropertyBag.put("sessionId", message.getSessionId());
+            messagePropertyBag.put("guid", message.getGuid());
+            messagePropertyBag.put("choreography", message.getChoreography());
+            messagePropertyBag.put("messageType", message.getMessageType().name());
+            AMQP.BasicProperties.Builder messageProperties = new AMQP.BasicProperties.Builder().headers(messagePropertyBag);
             LOG.debug("Sending message [{}]", message.getGuid());
-
-            MessageProducer producer = session.createProducer(destination);
-            producer.send(jmsMessage);
+            channel.basicPublish(exchange, routing, messageProperties.build(), serialized.getBytes());
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Sent: " + serialized);
             }
@@ -135,9 +140,8 @@ public class CoreSender {
                 LOG.info("Sent: " + serialized.substring(0, endIndex > 0 ? endIndex : Math.min(350, serialized.length())));
             }
         }
-        catch (JMSException e) {
+        catch (IOException e) {
             LOG.error("Error sending message", e);
-            throw new RuntimeException(e);
         }
     }
 
@@ -145,4 +149,18 @@ public class CoreSender {
         return queue;
     }
 
+    @Override
+    public void shutdownCompleted(ShutdownSignalException cause) {
+        LOG.warn("Connection or Channel Shutdown: {}", cause.getReason());
+    }
+
+    @Override
+    public void handleRecovery(Recoverable recoverable) {
+        LOG.info("Connection or Channel Recovered");
+    }
+
+    @Override
+    public void handleRecoveryStarted(Recoverable recoverable) {
+        LOG.info("Connection or Channel Recovering");
+    }
 }
