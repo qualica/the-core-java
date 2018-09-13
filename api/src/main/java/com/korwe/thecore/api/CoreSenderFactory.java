@@ -16,13 +16,24 @@ public class CoreSenderFactory {
 
     private Map<String, Connection> connections = new ConcurrentHashMap<>();
 
+    private CoreConnectionFactory coreConnectionFactory;
+
+    /**
+     * @param coreConnectionFactory The {@link CoreConnectionFactory CoreConnectionFactory} used to create a
+     *                              {@link Connection Connection} used by a {@link CoreSender CoreSender}
+     * @since 2.1.0-b1
+     */
+    public CoreSenderFactory(CoreConnectionFactory coreConnectionFactory) {
+        this.coreConnectionFactory = coreConnectionFactory;
+    }
+
     public CoreSender createCoreSender(MessageQueue queue,
                                        CoreSenderConnectionType senderConnectionType,
                                        String serviceName) {
         CoreSender coreSender = null;
         switch (senderConnectionType) {
             case NewConnection:
-                coreSender = new CoreSender(queue);
+                coreSender = new CoreSender(coreConnectionFactory, queue);
                 break;
             case SharedConnection:
                 Connection connection = getConnection(serviceName);
@@ -51,7 +62,7 @@ public class CoreSenderFactory {
         }
         else {
             try {
-                Connection newConnection = CoreConnection.coreConnection(CoreConfig.getConfig());
+                Connection newConnection = coreConnectionFactory.newConnection();
                 connections.put(serviceName, newConnection);
                 connection = newConnection;
             }
@@ -63,4 +74,5 @@ public class CoreSenderFactory {
 
         return connection;
     }
+
 }

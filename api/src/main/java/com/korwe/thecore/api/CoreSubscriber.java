@@ -35,7 +35,12 @@ public class CoreSubscriber extends CoreReceiver {
     private final String filter;
 
     public CoreSubscriber(MessageQueue queue, String filter) {
-        super(queue);
+        super(new CoreConnectionFactory(), queue);
+        this.filter = filter;
+    }
+
+    public CoreSubscriber(CoreConnectionFactory coreConnectionFactory, MessageQueue queue, String filter) {
+        super(coreConnectionFactory, queue);
         this.filter = filter;
     }
 
@@ -44,12 +49,12 @@ public class CoreSubscriber extends CoreReceiver {
         LOG.info("Binding to topic " + queueName);
         try {
             channel.exchangeDeclare(MessageQueue.TOPIC_EXCHANGE, BuiltinExchangeType.TOPIC, true, true, null);
-            queueName = channel.queueDeclare(queueName, true, false, true, null).getQueue();
+            this.queueName = channel.queueDeclare(queueName, true, false, true, null).getQueue();
             channel.queueBind(queueName, MessageQueue.TOPIC_EXCHANGE, getQueueName(queue));
-            channel.basicConsume(queueName, true, this);
+            LOG.info("Successfully bound to topic");
         }
         catch (IOException e) {
-            e.printStackTrace();
+            LOG.error("Error binding to topic", e);
         }
     }
 

@@ -38,24 +38,31 @@ public class CoreReceiver implements Consumer {
     private CoreMessageSerializer serializer;
     private Channel channel;
     private CoreMessageHandler handler;
+    protected String queueName;
 
-    public CoreReceiver(MessageQueue queue) {
+    public CoreReceiver(CoreConnectionFactory coreConnectionFactory, MessageQueue queue) {
         this.queue = queue;
         this.serializer = new CoreMessageXmlSerializer();
+        try {
+            this.connection = coreConnectionFactory.newConnection();
+            if (connection != null) {
+                this.channel = connection.createChannel();
+                bindToQueue(getQueueName(queue), channel);
+            }
+        }
+        catch (IOException | TimeoutException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 
     public void connect(CoreMessageHandler handler) {
         this.handler = handler;
         try {
-            this.connection = CoreConnection.coreConnection(CoreConfig.getConfig());
-            if (connection != null) {
-                this.channel = connection.createChannel();
-            }
-            bindToQueue(getQueueName(queue), channel);
-            LOG.info("Successfully bound to queue or topic");
+            channel.basicConsume(queueName, true, this);
         }
         catch (IOException e) {
-            LOG.error("Error creating channel and connection", e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -78,9 +85,9 @@ public class CoreReceiver implements Consumer {
         LOG.info("Binding to queue " + queueName);
         try {
             channel.exchangeDeclare(MessageQueue.DIRECT_EXCHANGE, BuiltinExchangeType.DIRECT, true, true, null);
-            queueName = channel.queueDeclare(queueName, true, false, true, null).getQueue();
+            this.queueName = channel.queueDeclare(queueName, true, false, true, null).getQueue();
             channel.queueBind(queueName, MessageQueue.DIRECT_EXCHANGE, queueName);
-            channel.basicConsume(queueName, true, this);
+            LOG.info("Successfully bound to queue");
         }
         catch (IOException e) {
             LOG.error("Error binding to queue", e);
@@ -88,7 +95,7 @@ public class CoreReceiver implements Consumer {
     }
 
     protected String getQueueName(MessageQueue queue) {
-        return queue.getQueueName();
+        return queueName;
     }
 
     @Override
@@ -120,7 +127,6 @@ public class CoreReceiver implements Consumer {
     public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws
                                                                                                                     IOException {
         String msgText = new String(body);
-
         if (LOG.isDebugEnabled()) {
             LOG.debug("Received: " + msgText);
         }
@@ -129,6 +135,8 @@ public class CoreReceiver implements Consumer {
             LOG.info("Received: " + msgText.substring(0, endIndex > 0 ? endIndex : Math.min(350, msgText.length())));
         }
         CoreMessage message = serializer.deserialize(msgText);
-        handler.handleMessage(message);
+        if (handler != null) {
+            handler.handleMessage(message);
+        }
     }
 }

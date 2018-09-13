@@ -35,6 +35,7 @@ public class CoreSender implements ShutdownListener, RecoveryListener {
     private static final Logger LOG = LoggerFactory.getLogger(CoreSender.class);
 
     protected MessageQueue queue;
+
     protected Connection connection;
     protected CoreMessageSerializer serializer;
     protected Channel channel;
@@ -43,11 +44,38 @@ public class CoreSender implements ShutdownListener, RecoveryListener {
         this.serializer = new CoreMessageXmlSerializer();
     }
 
+    /**
+     * @param queue             The message queue constant settings to use when declaring and binding exchanges and
+     *                          queues with routing information
+     */
     public CoreSender(MessageQueue queue) {
+        this(new CoreConnectionFactory(), queue);
+    }
+
+    /**
+     * @param coreConnectionFactory The {@link CoreConnectionFactory CoreConnectionFactory} used to
+     *                          create the connection
+     * @param queue             The message queue constant settings to use when declaring and binding exchanges and
+     *                          queues with routing information
+     */
+    public CoreSender(CoreConnectionFactory coreConnectionFactory, MessageQueue queue) {
         this();
+        try {
+            this.connection = coreConnectionFactory.newConnection();
+            initialise(queue);
+        }
+        catch (IOException | TimeoutException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * @param queue The message queue constant settings to use when declaring and binding exchanges and
+     *              queues with routing information
+     */
+    protected void initialise(MessageQueue queue) {
         this.queue = queue;
         try {
-            this.connection = CoreConnection.coreConnection(CoreConfig.getConfig());
             if (connection != null) {
                 this.channel = connection.createChannel();
                 channel.addShutdownListener(this);
