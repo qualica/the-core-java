@@ -19,81 +19,85 @@
 
 package com.korwe.thecore.api;
 
-import com.korwe.thecore.messages.CoreMessage;
-import com.korwe.thecore.messages.CoreMessageSerializer;
-import com.korwe.thecore.messages.CoreMessageXmlSerializer;
-import org.apache.qpid.AMQException;
-import org.apache.qpid.client.AMQConnection;
-import org.apache.qpid.client.AMQQueue;
-import org.apache.qpid.framing.AMQShortString;
-import org.apache.qpid.transport.MessageAcceptMode;
-import org.apache.qpid.url.URLSyntaxException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.korwe.thecore.messages.*;
+import com.rabbitmq.client.*;
+import org.slf4j.*;
 
-import javax.jms.*;
+import java.io.*;
+import java.util.concurrent.*;
 
 /**
  * @author <a href="mailto:nithia.govender@korwe.com>Nithia Govender</a>
  */
-public class CoreReceiver implements MessageListener {
+public class CoreReceiver implements Consumer {
 
     private static final Logger LOG = LoggerFactory.getLogger(CoreReceiver.class);
 
-    private final MessageQueue queue;
-    protected Connection connection;
+    protected final MessageQueue queue;
+    private Connection connection;
     private CoreMessageSerializer serializer;
-    private Session session;
+    private Channel channel;
     private CoreMessageHandler handler;
-    private String queueName;
 
-    public CoreReceiver(MessageQueue queue) {
+    protected CoreReceiver(MessageQueue queue) {
         this.queue = queue;
-        serializer = new CoreMessageXmlSerializer();
+        this.serializer = new CoreMessageXmlSerializer();
+    }
+
+    public CoreReceiver(CoreConnectionFactory coreConnectionFactory, MessageQueue queue) {
+        this(queue);
+        initialiseConnection(coreConnectionFactory, queue);
+    }
+
+    protected void initialiseConnection(CoreConnectionFactory coreConnectionFactory, MessageQueue queue) {
+        try {
+            this.connection = coreConnectionFactory.newConnection();
+            if (connection != null) {
+                this.channel = connection.createChannel();
+                bindToQueue(getQueueName(queue), channel);
+            }
+        }
+        catch (IOException | TimeoutException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public void connect(CoreMessageHandler handler) {
+        this.handler = handler;
         try {
-            this.handler = handler;
-
-            CoreConfig config = CoreConfig.getConfig();
-
-            connection = new AMQConnection(config.getSetting("amqp_server"),
-                                                                   config.getIntSetting("amqp_port"),
-                                                                   config.getSetting("amqp_user"),
-                                                                   config.getSetting("amqp_password"),
-                                                                   null,
-                                                                   config.getSetting("amqp_vhost"));
-            session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-            queueName = getQueueName(queue);
-            bindToQueue(queueName, session);
-            LOG.info("Connected and waiting for messages: " + queueName);
+            channel.basicConsume(getQueueName(queue), true, this);
         }
-        catch (Exception e) {
-            LOG.error("Error connecting to broker", e);
+        catch (IOException e) {
             throw new RuntimeException(e);
         }
-
     }
 
     public void close() {
-        LOG.info("Closing receiver session and connection");
+        LOG.info("Closing receiver channel and connection");
         try {
-            session.close();
-            connection.close();
+            if (channel != null) {
+                channel.close();
+            }
+            if (connection != null) {
+                connection.close();
+            }
         }
-        catch (JMSException e) {
-            LOG.warn("Error connecting to broker", e);
+        catch (TimeoutException | IOException e) {
+            LOG.error("Error closing channel and connection", e);
         }
     }
 
-    protected void bindToQueue(String queueName, Session session) throws JMSException {
-        AMQShortString amqName = AMQShortString.valueOf(queueName);
-        Destination destination = new AMQQueue(AMQShortString.valueOf(MessageQueue.DIRECT_EXCHANGE), amqName, amqName);
-
-        MessageConsumer consumer = session.createConsumer(destination);
-        consumer.setMessageListener(this);
-        connection.start();
+    protected void bindToQueue(String queueName, Channel channel) {
+        LOG.info("Binding to queue " + queueName);
+        try {
+            channel.exchangeDeclare(MessageQueue.DIRECT_EXCHANGE, BuiltinExchangeType.DIRECT, true, true, null);
+            channel.queueDeclare(queueName, true, false, true, null).getQueue();
+            channel.queueBind(queueName, MessageQueue.DIRECT_EXCHANGE, queueName);
+            LOG.info("Successfully bound to queue");
+        }
+        catch (IOException e) {
+            LOG.error("Error binding to queue", e);
+        }
     }
 
     protected String getQueueName(MessageQueue queue) {
@@ -101,30 +105,44 @@ public class CoreReceiver implements MessageListener {
     }
 
     @Override
-    public void onMessage(Message jmsMessage) {
-        try {
-            String msgText = "";
-            if (jmsMessage instanceof BytesMessage) {
-                msgText = ((BytesMessage) jmsMessage).readUTF();
-            }
-            else if (jmsMessage instanceof TextMessage) {
-                msgText = ((TextMessage) jmsMessage).getText();
-            }
-
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Received: " + msgText);
-            }
-            else {
-                int endIndex = msgText.indexOf("</function");
-                LOG.info("Received: " + msgText.substring(0, endIndex > 0 ? endIndex : Math.min(350, msgText.length())));
-            }
-            CoreMessage message = serializer.deserialize(msgText);
-            handler.handleMessage(message);
-        }
-        catch (JMSException e) {
-            LOG.error("Error receiving message", e);
-            throw new RuntimeException(e);
-        }
+    public void handleConsumeOk(String consumerTag) {
+        LOG.info("Consumer Connected: {}", consumerTag);
     }
 
+    @Override
+    public void handleCancelOk(String consumerTag) {
+        LOG.info("Consumer Cancelled: {}", consumerTag);
+    }
+
+    @Override
+    public void handleCancel(String consumerTag) {
+        LOG.warn("Consumer Cancelled Unexpectedly: {}", consumerTag);
+    }
+
+    @Override
+    public void handleShutdownSignal(String consumerTag, ShutdownSignalException sig) {
+        LOG.warn("Connection or Channel Shutdown: {} - {}", consumerTag, sig.getReason());
+    }
+
+    @Override
+    public void handleRecoverOk(String consumerTag) {
+        LOG.info("Connection or Channel Recovered: {}", consumerTag);
+    }
+
+    @Override
+    public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body)
+            throws IOException {
+        String msgText = new String(body);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Received: " + msgText);
+        }
+        else {
+            int endIndex = msgText.indexOf("</function");
+            LOG.info("Received: " + msgText.substring(0, endIndex > 0 ? endIndex : Math.min(350, msgText.length())));
+        }
+        CoreMessage message = serializer.deserialize(msgText);
+        if (handler != null) {
+            handler.handleMessage(message);
+        }
+    }
 }

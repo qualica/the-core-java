@@ -82,10 +82,13 @@ public class CoreConfig {
         prop.setProperty("amqp_user", "guest");
         prop.setProperty("amqp_password", "guest");
         prop.setProperty("session_message_filter", "#");
-        prop.setProperty("processor_type", "com.korwe.thecore.session.BasicMessageProcessor");
+        prop.setProperty("processor_type", "com.korwe.thecore.channel.BasicMessageProcessor");
         prop.setProperty("timeout_seconds", "1800");
         prop.setProperty("scxml_path", "core_session.scxml");
         prop.setProperty("max_threads", "16");
+        prop.setProperty("connection_retries","10");
+        prop.setProperty("retry_backoff_millis","2000");
+        prop.setProperty("retry_backoff_max_millis","10000");
         return prop;
     }
 }

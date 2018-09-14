@@ -19,9 +19,7 @@
 
 package com.korwe.thecore.scxml;
 
-import com.korwe.thecore.api.CoreMessageHandler;
-import com.korwe.thecore.api.CoreSubscriber;
-import com.korwe.thecore.api.MessageQueue;
+import com.korwe.thecore.api.*;
 import com.korwe.thecore.messages.CoreMessage;
 import com.korwe.thecore.messages.ServiceRequest;
 import com.korwe.thecore.messages.ServiceResponse;
@@ -47,6 +45,7 @@ public class ScxmlMessageProcessorTest {
     @Test
     public void testProcessMessage() throws Exception {
         final ScxmlMessageProcessor proc = new ScxmlMessageProcessor();
+        CoreConfig.initialize(this.getClass().getResourceAsStream("/coreconfig.xml"));
         proc.initialize("testsession2");
         final ServiceRequest req = new ServiceRequest("testsession2", "login");
         req.setChoreography("LoginService");

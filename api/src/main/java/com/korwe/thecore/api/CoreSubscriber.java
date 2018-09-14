@@ -19,15 +19,11 @@
 
 package com.korwe.thecore.api;
 
-import org.apache.qpid.client.AMQTopic;
-import org.apache.qpid.framing.AMQShortString;
+import com.rabbitmq.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.jms.Destination;
-import javax.jms.JMSException;
-import javax.jms.MessageConsumer;
-import javax.jms.Session;
+import java.io.IOException;
 
 /**
  * @author <a href="mailto:nithia.govender@korwe.com>Nithia Govender</a>
@@ -39,20 +35,27 @@ public class CoreSubscriber extends CoreReceiver {
     private final String filter;
 
     public CoreSubscriber(MessageQueue queue, String filter) {
+        this(new CoreConnectionFactory(), queue, filter);
+    }
+
+    public CoreSubscriber(CoreConnectionFactory coreConnectionFactory, MessageQueue queue, String filter) {
         super(queue);
         this.filter = filter;
+        initialiseConnection(coreConnectionFactory, queue);
     }
 
     @Override
-    protected void bindToQueue(String queueName, Session session) throws JMSException {
+    protected void bindToQueue(String queueName, Channel channel) {
         LOG.info("Binding to topic " + queueName);
-
-        AMQShortString amqName = AMQShortString.valueOf(queueName);
-        Destination destination = new AMQTopic(AMQShortString.valueOf(MessageQueue.TOPIC_EXCHANGE), amqName, amqName);
-
-        MessageConsumer consumer = session.createConsumer(destination);
-        consumer.setMessageListener(this);
-        connection.start();
+        try {
+            channel.exchangeDeclare(MessageQueue.TOPIC_EXCHANGE, BuiltinExchangeType.TOPIC, true, true, null);
+            channel.queueDeclare(queueName, true, false, true, null).getQueue();
+            channel.queueBind(queueName, MessageQueue.TOPIC_EXCHANGE, getQueueName(queue));
+            LOG.info("Successfully bound to topic");
+        }
+        catch (IOException e) {
+            LOG.error("Error binding to topic", e);
+        }
     }
 
     @Override

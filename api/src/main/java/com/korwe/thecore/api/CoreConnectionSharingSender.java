@@ -1,12 +1,11 @@
 package com.korwe.thecore.api;
 
-import com.korwe.thecore.messages.CoreMessageXmlSerializer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.korwe.thecore.messages.*;
+import com.rabbitmq.client.*;
+import org.slf4j.*;
 
-import javax.jms.Connection;
-import javax.jms.JMSException;
-import javax.jms.Session;
+import java.io.*;
+import java.util.concurrent.*;
 
 /**
  * @author <a href="mailto:dario.matonicki@korwe.com>Dario Matonicki</a>
@@ -15,29 +14,20 @@ public class CoreConnectionSharingSender extends CoreSender {
 
     private static final Logger LOG = LoggerFactory.getLogger(CoreConnectionSharingSender.class);
 
-
     protected CoreConnectionSharingSender(MessageQueue queue, Connection sharedConnection) {
-        try {
-            this.queue = queue;
-            this.connection = sharedConnection;
-
-            session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-            serializer = new CoreMessageXmlSerializer();
-        }
-        catch (JMSException e) {
-            LOG.error("Error creating sender", e);
-            throw new RuntimeException(e);
-        }
+        serializer = new CoreMessageXmlSerializer();
+        this.connection = sharedConnection;
+        initialise(queue);
     }
 
     @Override
     public void close() {
-        LOG.info("Closing sender session only");
+        LOG.info("Closing sender channel only");
         try {
-            session.close();
+            channel.close();
         }
-        catch (JMSException e) {
-            LOG.warn("Error closing session", e);
+        catch (TimeoutException | IOException e) {
+            LOG.warn("Error closing channel", e);
         }
     }
 }
