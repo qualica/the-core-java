@@ -35,13 +35,13 @@ public class CoreSubscriber extends CoreReceiver {
     private final String filter;
 
     public CoreSubscriber(MessageQueue queue, String filter) {
-        super(new CoreConnectionFactory(), queue);
-        this.filter = filter;
+        this(new CoreConnectionFactory(), queue, filter);
     }
 
     public CoreSubscriber(CoreConnectionFactory coreConnectionFactory, MessageQueue queue, String filter) {
-        super(coreConnectionFactory, queue);
+        super(queue);
         this.filter = filter;
+        initialiseConnection(coreConnectionFactory, queue);
     }
 
     @Override
@@ -49,7 +49,7 @@ public class CoreSubscriber extends CoreReceiver {
         LOG.info("Binding to topic " + queueName);
         try {
             channel.exchangeDeclare(MessageQueue.TOPIC_EXCHANGE, BuiltinExchangeType.TOPIC, true, true, null);
-            this.queueName = channel.queueDeclare(queueName, true, false, true, null).getQueue();
+            channel.queueDeclare(queueName, true, false, true, null).getQueue();
             channel.queueBind(queueName, MessageQueue.TOPIC_EXCHANGE, getQueueName(queue));
             LOG.info("Successfully bound to topic");
         }
