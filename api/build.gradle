@@ -4,6 +4,8 @@ dependencies {
     compile 'com.rabbitmq:amqp-client:4.2.1'
     compile 'org.apache.geronimo.specs:geronimo-jms_1.1_spec:1.1.1'
     compile 'com.jamesmurty.utils:java-xmlbuilder:1.1'
+    compile group: 'io.zipkin.brave', name: 'brave', version: '5.4.1'
+
 }
 
 jar {

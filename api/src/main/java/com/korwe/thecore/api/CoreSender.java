@@ -19,13 +19,21 @@
 
 package com.korwe.thecore.api;
 
-import com.korwe.thecore.messages.*;
+import brave.Span;
+import brave.Tracing;
+import brave.internal.HexCodec;
+import brave.propagation.TraceContext;
+import com.korwe.thecore.messages.CoreMessage;
+import com.korwe.thecore.messages.CoreMessageSerializer;
+import com.korwe.thecore.messages.CoreMessageXmlSerializer;
 import com.rabbitmq.client.*;
-import org.slf4j.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.*;
-import java.util.*;
-import java.util.concurrent.*;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 /**
  * @author <a href="mailto:nithia.govender@korwe.com>Nithia Govender</a>
@@ -33,6 +41,20 @@ import java.util.concurrent.*;
 public class CoreSender implements ShutdownListener, RecoveryListener {
 
     private static final Logger LOG = LoggerFactory.getLogger(CoreSender.class);
+
+    /**
+     * 128 or 64-bit trace ID lower-hex encoded into 32 or 16 characters (required)
+     */
+    static final String TRACE_ID_NAME = "X-B3-TraceId";
+    /**
+     * 64-bit span ID lower-hex encoded into 16 characters (required)
+     */
+    static final String SPAN_ID_NAME = "X-B3-SpanId";
+    /**
+     * "1" means report this span to the tracing system, "0" means do not. (absent means defer the
+     * decision to the receiver of this header).
+     */
+    static final String SAMPLED_NAME = "X-B3-Sampled";
 
     protected MessageQueue queue;
 
@@ -151,12 +173,31 @@ public class CoreSender implements ShutdownListener, RecoveryListener {
 
     private void send(CoreMessage message, String exchange, String routing) {
         try {
+
+            TraceContext traceContext = null;
+            Tracing tracing = Tracing.current();
+
+            if (tracing != null) {
+                Span currentSpan = tracing.tracer().currentSpan();
+                if (currentSpan != null) {
+                    traceContext = currentSpan.context();
+                }
+            }
+
+
             String serialized = serializer.serialize(message);
             Map<String, Object> messagePropertyBag = new HashMap<>();
             messagePropertyBag.put("sessionId", message.getSessionId());
             messagePropertyBag.put("guid", message.getGuid());
             messagePropertyBag.put("choreography", message.getChoreography());
             messagePropertyBag.put("messageType", message.getMessageType().name());
+
+            if (traceContext != null) {
+                messagePropertyBag.put(TRACE_ID_NAME, getTraceId(traceContext));
+                messagePropertyBag.put(SPAN_ID_NAME, getSpanId(traceContext));
+                messagePropertyBag.put(SAMPLED_NAME, getSampled(traceContext));
+            }
+
             AMQP.BasicProperties.Builder messageProperties = new AMQP.BasicProperties.Builder().headers(messagePropertyBag);
             LOG.debug("Sending message [{}]", message.getGuid());
             channel.basicPublish(exchange, routing, messageProperties.build(), serialized.getBytes());
@@ -191,4 +232,18 @@ public class CoreSender implements ShutdownListener, RecoveryListener {
     public void handleRecoveryStarted(Recoverable recoverable) {
         LOG.info("Connection or Channel Recovering");
     }
+
+    private String getSampled(TraceContext traceContext) {
+        if (traceContext != null && traceContext.sampled() != null) {
+            return traceContext.sampled() ? "1" : "0";
+        }
+        return null;
+    }
+    private String getSpanId(TraceContext traceContext) {
+        return traceContext != null ? HexCodec.toLowerHex(traceContext.spanId()) : null;
+    }
+    private String getTraceId(TraceContext traceContext) {
+        return traceContext != null ? traceContext.traceIdString() : null;
+    }
+
 }
