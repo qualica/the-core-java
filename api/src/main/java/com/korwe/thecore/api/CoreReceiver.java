@@ -19,12 +19,21 @@
 
 package com.korwe.thecore.api;
 
-import com.korwe.thecore.messages.*;
+import brave.Span;
+import brave.Tracing;
+import brave.internal.HexCodec;
+import brave.propagation.TraceContext;
+import brave.propagation.TraceContextOrSamplingFlags;
+import com.korwe.thecore.messages.CoreMessage;
+import com.korwe.thecore.messages.CoreMessageSerializer;
+import com.korwe.thecore.messages.CoreMessageXmlSerializer;
 import com.rabbitmq.client.*;
-import org.slf4j.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.*;
-import java.util.concurrent.*;
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 /**
  * @author <a href="mailto:nithia.govender@korwe.com>Nithia Govender</a>
@@ -32,6 +41,20 @@ import java.util.concurrent.*;
 public class CoreReceiver implements Consumer {
 
     private static final Logger LOG = LoggerFactory.getLogger(CoreReceiver.class);
+
+    /**
+     * 128 or 64-bit trace ID lower-hex encoded into 32 or 16 characters (required)
+     */
+    static final String TRACE_ID_NAME = "X-B3-TraceId";
+    /**
+     * 64-bit span ID lower-hex encoded into 16 characters (required)
+     */
+    static final String SPAN_ID_NAME = "X-B3-SpanId";
+    /**
+     * "1" means report this span to the tracing system, "0" means do not. (absent means defer the
+     * decision to the receiver of this header).
+     */
+    static final String SAMPLED_NAME = "X-B3-Sampled";
 
     protected final MessageQueue queue;
     private Connection connection;
@@ -132,6 +155,14 @@ public class CoreReceiver implements Consumer {
     @Override
     public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body)
             throws IOException {
+
+        Span span = extractB3Headers(properties.getHeaders());
+
+        if (span != null) {
+            span.start();
+        }
+
+
         String msgText = new String(body);
         if (LOG.isDebugEnabled()) {
             LOG.debug("Received: " + msgText);
@@ -144,5 +175,34 @@ public class CoreReceiver implements Consumer {
         if (handler != null) {
             handler.handleMessage(message);
         }
+
+        if (span != null) {
+            span.finish();
+        }
+    }
+
+    private Span extractB3Headers(Map<String, Object> headers) {
+        String traceId = (String) headers.get(TRACE_ID_NAME);
+        String spanId = (String) headers.get(SPAN_ID_NAME);
+        String sampled = (String) headers.get(SAMPLED_NAME);
+
+        if (traceId != null) {
+
+            TraceContext.Builder builder = TraceContext.newBuilder()
+                    .traceId(HexCodec.lowerHexToUnsignedLong(traceId))
+                    .spanId(HexCodec.lowerHexToUnsignedLong(spanId))
+                    .sampled(sampled != null && sampled.equals("1"));
+
+            TraceContext traceContext = builder.build();
+
+            TraceContextOrSamplingFlags samplingFlags = TraceContextOrSamplingFlags.create(traceContext);
+
+            Span span = Tracing.currentTracer().nextSpan(samplingFlags);
+
+            return span;
+
+        }
+
+        return null;
     }
 }

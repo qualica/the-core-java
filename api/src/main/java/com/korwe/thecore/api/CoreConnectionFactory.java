@@ -18,11 +18,15 @@
  */
 package com.korwe.thecore.api;
 
-import com.rabbitmq.client.*;
-import org.slf4j.*;
+import com.rabbitmq.client.AddressResolver;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.*;
-import java.util.concurrent.*;
+import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeoutException;
 
 /**
  * An adapter to {@link ConnectionFactory ConnectionFactory} used to configure and create a
@@ -51,6 +55,9 @@ public class CoreConnectionFactory extends ConnectionFactory {
     private int initialConnectionRetries = DEFAULT_INITIAL_CONNECTION_RETRIES;
     private int initialConnectionBackoff = DEFAULT_INITIAL_CONNECTION_BACKOFF;
     private int initialConnectionBackoffMaximum = DEFAULT_INITIAL_CONNECTION_BACKOFF_MAXIMUM;
+
+    public CoreConnectionFactory() {
+    }
 
     /**
      * @return The amount of times the initial connection should be attempted before connection attempt is failed.
