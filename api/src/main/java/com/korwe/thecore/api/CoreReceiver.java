@@ -182,9 +182,10 @@ public class CoreReceiver implements Consumer {
     }
 
     private Span extractB3Headers(Map<String, Object> headers) {
-        String traceId = (String) headers.get(TRACE_ID_NAME);
-        String spanId = (String) headers.get(SPAN_ID_NAME);
-        String sampled = (String) headers.get(SAMPLED_NAME);
+
+        String traceId = headers.get(TRACE_ID_NAME) != null ? headers.get(TRACE_ID_NAME).toString() : null;
+        String spanId = headers.get(SPAN_ID_NAME) != null ? headers.get(SPAN_ID_NAME).toString() : null;
+        String sampled = headers.get(SAMPLED_NAME) != null ? headers.get(SAMPLED_NAME).toString() : null;
 
         if (traceId != null) {
 
