@@ -20,8 +20,8 @@
 package com.korwe.thecore.api;
 
 import brave.Span;
-import brave.Tracing;
 import brave.internal.HexCodec;
+import brave.propagation.ThreadLocalSpan;
 import brave.propagation.TraceContext;
 import brave.propagation.TraceContextOrSamplingFlags;
 import com.korwe.thecore.messages.CoreMessage;
@@ -62,9 +62,13 @@ public class CoreReceiver implements Consumer {
     private Channel channel;
     private CoreMessageHandler handler;
 
+
+    private ThreadLocalSpan threadLocalSpan;
+
     protected CoreReceiver(MessageQueue queue) {
         this.queue = queue;
         this.serializer = new CoreMessageXmlSerializer();
+        this.threadLocalSpan = ThreadLocalSpan.CURRENT_TRACER;
     }
 
     public CoreReceiver(CoreConnectionFactory coreConnectionFactory, MessageQueue queue) {
@@ -153,8 +157,7 @@ public class CoreReceiver implements Consumer {
     }
 
     @Override
-    public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body)
-            throws IOException {
+    public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) {
 
         Span span = extractB3Headers(properties.getHeaders());
 
@@ -162,7 +165,16 @@ public class CoreReceiver implements Consumer {
             span.start();
         }
 
+        handleMessage(body);
 
+        if (span != null) {
+            span.finish();
+            threadLocalSpan.remove();
+        }
+
+    }
+
+    private void handleMessage(byte[] body) {
         String msgText = new String(body);
         if (LOG.isDebugEnabled()) {
             LOG.debug("Received: " + msgText);
@@ -175,16 +187,13 @@ public class CoreReceiver implements Consumer {
         if (handler != null) {
             handler.handleMessage(message);
         }
-
-        if (span != null) {
-            span.finish();
-        }
     }
 
     private Span extractB3Headers(Map<String, Object> headers) {
-        String traceId = (String) headers.get(TRACE_ID_NAME);
-        String spanId = (String) headers.get(SPAN_ID_NAME);
-        String sampled = (String) headers.get(SAMPLED_NAME);
+
+        String traceId = headers.get(TRACE_ID_NAME) != null ? headers.get(TRACE_ID_NAME).toString() : null;
+        String spanId = headers.get(SPAN_ID_NAME) != null ? headers.get(SPAN_ID_NAME).toString() : null;
+        String sampled = headers.get(SAMPLED_NAME) != null ? headers.get(SAMPLED_NAME).toString() : null;
 
         if (traceId != null) {
 
@@ -197,10 +206,8 @@ public class CoreReceiver implements Consumer {
 
             TraceContextOrSamplingFlags samplingFlags = TraceContextOrSamplingFlags.create(traceContext);
 
-            Span span = Tracing.currentTracer().nextSpan(samplingFlags);
-
+            Span span = threadLocalSpan.next(samplingFlags);
             return span;
-
         }
 
         return null;
